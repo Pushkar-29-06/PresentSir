@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Android
+.gradle/
+**/.gradle/
+**/build/
+**/.cxx/
+local.properties
+**/debug.keystore
+
+# React Native
+.metro/
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+PresentSirNative/
