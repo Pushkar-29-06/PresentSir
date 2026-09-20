@@ -1,0 +1,31 @@
+@"
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Android
+.gradle/
+**/.gradle/
+**/build/
+**/.cxx/
+local.properties
+
+# React Native
+.metro/
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+PresentSirNative/
+"@ | Set-Content .gitignore
