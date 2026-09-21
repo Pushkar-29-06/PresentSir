@@ -22,7 +22,12 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def _create_token(subject: int, token_type: str, expires_delta: timedelta) -> tuple[str, str]:
+def _create_token(
+    subject: int,
+    token_type: str,
+    expires_delta: timedelta,
+    claims: dict | None = None,
+) -> tuple[str, str]:
     token_id = str(uuid4())
     now = datetime.now(timezone.utc)
     payload = {
@@ -32,22 +37,26 @@ def _create_token(subject: int, token_type: str, expires_delta: timedelta) -> tu
         "iat": now,
         "exp": now + expires_delta,
     }
+    if claims:
+        payload.update(claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm), token_id
 
 
-def create_access_token(subject: int) -> tuple[str, str]:
+def create_access_token(subject: int, claims: dict | None = None) -> tuple[str, str]:
     return _create_token(
         subject,
         "access",
         timedelta(minutes=settings.access_token_minutes),
+        claims,
     )
 
 
-def create_refresh_token(subject: int) -> tuple[str, str]:
+def create_refresh_token(subject: int, claims: dict | None = None) -> tuple[str, str]:
     return _create_token(
         subject,
         "refresh",
         timedelta(days=settings.refresh_token_days),
+        claims,
     )
 
 

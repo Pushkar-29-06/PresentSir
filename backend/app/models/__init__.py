@@ -15,6 +15,10 @@ from app.models.academic import (
     Enrollment,
     Slot,
 )
+from app.models.assessments import Assessment, assessment_scores
+from app.models.policy import Policy
+from app.models.notification import Notification
+from app.models.refresh_token import RefreshToken
 
 __all__ = [
     "User",
@@ -36,4 +40,9 @@ __all__ = [
     "Flag",
     "PairCooccurrence",
     "AttendanceDispute",
+    "Assessment",
+    "assessment_scores",
+    "Policy",
+    "Notification",
+    "RefreshToken",
 ]

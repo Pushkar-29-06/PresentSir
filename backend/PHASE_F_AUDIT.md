@@ -44,10 +44,9 @@ HTTP login-to-submit flow. Existing coverage validates the service pipeline
 and security invariants directly; live HTTP integration coverage should be
 added when an isolated integration-test database/Redis fixture is introduced.
 
-## Assessment schema gap
+## Assessment schema status
 
-The broader specification includes `assessments` and `assessment_scores`.
-Neither table exists in the applied 19-table baseline, and no columns or
-constraints were invented for them. Marks analytics therefore remains
-explicitly unavailable until the assessment schema is deliberately implemented
-as a separate migration phase.
+The assessment schema was deliberately added in the separate Phase G
+migration. `assessment_scores` has no primary key or uniqueness constraint
+because the supplied definition does not specify one. Marks analytics is now
+backed by persisted assessment scores.
