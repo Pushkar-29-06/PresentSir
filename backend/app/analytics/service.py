@@ -5,9 +5,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.academic import Enrollment, Offering
+from app.models.assessments import Assessment, assessment_scores
 from app.models.analytics import Flag
 from app.models.attendance import AttendanceAuditLog, AttendanceRecord, AttendanceSession
 from app.models.user import Student, User
+from app.services.phase_g import effective_policy
 
 
 def _closed_sessions(db: Session, offering_id: int | None = None):
@@ -51,6 +53,12 @@ def attendance_percentage(
     )
     counts = {status: sum(record.status == status for record in records) for status in ("PRESENT", "ABSENT", "EXCUSED")}
     held = len(sessions)
+    threshold = 75
+    if offering_id is not None:
+        offering = db.get(Offering, offering_id)
+        policy = effective_policy(db, offering) if offering is not None else None
+        if policy is not None:
+            threshold = policy.threshold_percent
     percentage = ((counts["PRESENT"] + counts["EXCUSED"]) / held * 100) if held else 0
     return {
         "student_id": student_id,
@@ -60,7 +68,7 @@ def attendance_percentage(
         "absent": counts["ABSENT"],
         "excused": counts["EXCUSED"],
         "percentage": round(percentage, 2),
-        "shortage": round(max(0, 75 - percentage), 2),
+        "shortage": round(max(0, threshold - percentage), 2),
     }
 
 
@@ -143,11 +151,23 @@ def student_overview(db: Session, student_id: int) -> dict:
             select(Enrollment.offering_id).where(Enrollment.student_id == student_id)
         )
     )
+    marks = list(db.execute(
+        select(
+            Assessment.id.label("assessment_id"),
+            Assessment.title,
+            Assessment.type,
+            Assessment.max_marks,
+            assessment_scores.c.marks,
+            assessment_scores.c.status,
+        )
+        .join(assessment_scores, assessment_scores.c.assessment_id == Assessment.id)
+        .where(assessment_scores.c.student_id == student_id)
+    ).mappings())
     return {
         "student_id": student_id,
         "attendance": [attendance_percentage(db, student_id, offering_id) for offering_id in offering_ids],
-        "marks_available": False,
-        "marks": [],
+        "marks_available": bool(marks),
+        "marks": [dict(row) for row in marks],
     }
 
 

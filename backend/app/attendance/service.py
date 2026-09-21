@@ -19,6 +19,7 @@ from app.models.attendance import (
 )
 from app.models.user import Faculty, User
 from app.models.user import Student
+from app.models.notification import Notification
 from app.risk.service import headcount_mismatch, pair_affinity_flag
 
 
@@ -462,6 +463,16 @@ def close_session(
         db.add(record)
         db.flush()
         if not present:
+            db.add(
+                Notification(
+                    user_id=student_id,
+                    type="ATTENDANCE_SHORTAGE",
+                    title="Attendance shortage",
+                    body="You were marked absent for this attendance session.",
+                    created_at=current,
+                    updated_at=current,
+                )
+            )
             logger.info(
                 "shortage notification",
                 extra={

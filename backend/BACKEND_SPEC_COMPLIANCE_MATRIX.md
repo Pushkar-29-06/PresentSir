@@ -2,13 +2,12 @@
 
 **Audit date:** 2026-09-21  
 **Applied migration:** `f93f2ab9f8a2_initial_schema`  
-**Baseline policy:** The 19-table migration is immutable. No schema was added
-or inferred during this audit.
+**Baseline policy:** The original 19-table migration remains immutable. Phase G
+adds a separate migration containing only the five supplied schema areas.
 
 ## Evidence boundary
 
-`BACKEND_SPEC.md` is not present as a physical file under the workspace.
-This matrix therefore distinguishes:
+This matrix distinguishes:
 
 - **Verified**: demonstrated by the current models, migration, routes, or tests.
 - **Gap**: the broader supplied specification names an item absent from the
@@ -24,11 +23,11 @@ This matrix therefore distinguishes:
 | `device_bindings`, `registration_windows`, `device_requests` | Present | Verified |
 | `attendance_sessions`, `attendance_submissions`, `attendance_records`, `attendance_audit_log` | Present | Verified |
 | `flags`, `pair_cooccurrence`, `attendance_disputes` | Present | Verified |
-| `assessments` | Absent | Gap |
-| `assessment_scores` | Absent | Gap |
-| `policies` | Absent | Gap |
-| `notifications` | Absent | Gap |
-| `refresh_tokens` | Absent; refresh tokens are currently JWT-based | Gap |
+| `assessments` | Present in Phase G revision | Verified |
+| `assessment_scores` | Present without PK/unique constraint, as specified | Verified |
+| `policies` | Present in Phase G revision | Verified |
+| `notifications` | Present in Phase G revision | Verified |
+| `refresh_tokens` | Present in Phase G revision; hashed rotating tokens | Verified |
 
 The current SQLAlchemy metadata and migration contain exactly 19 tables.
 
@@ -43,7 +42,7 @@ The current SQLAlchemy metadata and migration contain exactly 19 tables.
 | JSON/JSONB risk fields | Verified |
 | UTC-aware timestamp columns | Verified where timestamps are modeled |
 | Exact full-spec column inventory and nullability | Unverified because the source document is not local |
-| Assessment, policy, notification, and refresh-token columns | Gap |
+| Assessment, policy, notification, and refresh-token columns | Verified from supplied definitions |
 
 ## 3. Foreign keys and ownership
 
@@ -107,6 +106,7 @@ Exact allowed-value comparison with the unavailable specification remains
 | `POST` | `/auth/login` | Public |
 | `POST` | `/auth/refresh` | Refresh token |
 | `POST` | `/auth/logout` | Authenticated user |
+| `GET` | `/me` | Authenticated user |
 
 ### Device lifecycle
 
@@ -217,18 +217,14 @@ the local specification.
 | Item | Status |
 |---|---|
 | Live isolated TestClient + PostgreSQL + Redis fixture | Not implemented |
-| `assessments` table | Absent |
-| `assessment_scores` table | Absent |
-| Marks analytics | Unavailable |
-| `policies` table | Absent |
-| `notifications` table | Absent; shortage events currently use application logging |
-| `refresh_tokens` table | Absent; refresh tokens are JWT-based |
-| Physical `BACKEND_SPEC.md` for exact comparison | Unavailable in workspace |
+| `assessment_scores` primary/unique key | Intentionally unspecified and absent |
+| `policies.note` persistence | Intentionally absent; API-only field |
+| Notification-type enum/uniqueness | Intentionally unspecified |
+| Live isolated TestClient + PostgreSQL + Redis fixture | Not implemented |
 
 ## Gate result
 
-The implementation is **not specification-complete**. The 19-table baseline
-and implemented services pass the available verification, but the final gate
-is blocked by the unresolved assessment/assessment-score gap, additional
-broader-spec tables, absent live integration fixtures, and inability to perform
-an exact local `BACKEND_SPEC.md` comparison.
+The five Phase G schema areas are implemented and verified. The remaining
+known limitation is live isolated HTTP integration infrastructure; the
+assessment-score key and policy note omissions are intentional because the
+supplied definitions do not specify them.

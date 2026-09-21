@@ -19,3 +19,18 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str | None = None
+
+
+class MeUser(BaseModel):
+    id: int
+    login_id: str
+    name: str
+    email: str
+    phone: str
+    department_id: int | None
+    status: str
+
+
+class MeResponse(BaseModel):
+    user: MeUser
+    role: str
