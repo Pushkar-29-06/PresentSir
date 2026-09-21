@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
+from app.attendance.router import router as attendance_router
+from app.analytics.router import router as analytics_router
 from app.config import settings
 from app.device.router import router as device_router
 
@@ -28,3 +30,5 @@ def health() -> dict[str, str]:
 
 app.include_router(auth_router)
 app.include_router(device_router)
+app.include_router(attendance_router)
+app.include_router(analytics_router)
