@@ -1,0 +1,14 @@
+import { useEffect, useState } from "react";
+import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useAuth } from "../auth/AuthProvider";
+
+type Summary = { offering_id: number; sessions_held: number; present: number; absent: number; percentage: number; shortage: number };
+type History = { record_id: number; course_code: string; course_name: string; lecture_date: string; scheduled_start?: string | null; status?: string | null };
+type Overview = { attendance: Summary[] };
+
+export function StudentAttendanceScreen({ navigation }: { navigation: { navigate: (route: string, params?: unknown) => void } }) {
+  const { api } = useAuth(); const [summary, setSummary] = useState<Summary[]>([]); const [history, setHistory] = useState<History[]>([]); const [error, setError] = useState("");
+  useEffect(() => { void Promise.all([api.request<Overview>("/analytics/students/me/overview"), api.request<History[]>("/attendance/students/me/history")]).then(([overview, nextHistory]) => { setSummary(overview.attendance); setHistory(nextHistory); }).catch(() => setError("Unable to load attendance.")); }, []);
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>Attendance</Text><Text style={styles.notice}>Attendance can only be marked from the PresentSir mobile app.</Text>{error && <Text style={styles.error}>{error}</Text>}{summary.map((item) => <View style={styles.card} key={item.offering_id}><Text style={styles.cardTitle}>Offering {item.offering_id}</Text><Text style={styles.percent}>{item.percentage.toFixed(1)}%</Text><Text>Conducted {item.sessions_held} · Attended {item.present}</Text><Text style={item.percentage >= 75 ? styles.good : styles.warn}>{item.percentage >= 75 ? "On track" : "Shortage"}</Text></View>)}<Text style={styles.section}>Course history</Text>{history.map((item) => <View style={styles.row} key={item.record_id}><Text style={styles.rowTitle}>{item.course_code} — {item.course_name}</Text><Text>{item.lecture_date} · {item.status ?? "Pending"}</Text><Button title="Raise dispute" onPress={() => navigation.navigate("StudentDispute", { recordId: item.record_id } as never)} /></View>)}</ScrollView></SafeAreaView>;
+}
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: "#f7f9fc" }, content: { padding: 20, gap: 14 }, title: { fontSize: 30, fontWeight: "700" }, notice: { color: "#475569" }, error: { color: "#b91c1c" }, card: { padding: 18, borderRadius: 14, backgroundColor: "#fff", gap: 8 }, cardTitle: { fontWeight: "700" }, percent: { fontSize: 30, fontWeight: "700" }, good: { color: "#15803d", fontWeight: "700" }, warn: { color: "#b45309", fontWeight: "700" }, section: { fontSize: 22, fontWeight: "700", marginTop: 10 }, row: { padding: 16, borderRadius: 12, backgroundColor: "#fff", gap: 8 }, rowTitle: { fontWeight: "700" } });
