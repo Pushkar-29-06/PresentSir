@@ -18,7 +18,7 @@ def test_submission_proof_is_deterministic():
     first = submission_proof(7, 2, "android-1", "nonce-1234567890", "qr")
     second = submission_proof(7, 2, "android-1", "nonce-1234567890", "qr")
     assert first == second
-    assert b'"session_id":7' in first
+    assert first == b"ATT1|7|qr|android-1|nonce-1234567890"
 
 
 def test_valid_submission_signature_is_accepted():
