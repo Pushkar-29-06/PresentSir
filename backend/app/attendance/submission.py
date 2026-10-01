@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import json
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
@@ -30,14 +29,8 @@ def submission_proof(
     client_nonce: str,
     qr_token: str,
 ) -> bytes:
-    payload = {
-        "android_id": android_id,
-        "client_nonce": client_nonce,
-        "qr_token": qr_token,
-        "session_id": session_id,
-        "token_step": token_step,
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    del token_step
+    return f"ATT1|{session_id}|{qr_token}|{android_id}|{client_nonce}".encode()
 
 
 def _verify_submission_signature(

@@ -43,6 +43,11 @@ class RiskQueueItem(BaseModel):
     reasons: dict | None
 
 
+class RiskDecision(BaseModel):
+    action: str
+    note: str
+
+
 class RiskStatistics(BaseModel):
     total: int
     open: int

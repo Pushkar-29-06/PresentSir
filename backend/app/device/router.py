@@ -1,8 +1,12 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_roles
 from app.db import get_db
+from app.models.device import RegistrationWindow
 from app.models.user import User
 from app.schemas.device import (
     DeviceRegistrationRequest,
@@ -39,6 +43,22 @@ def open_window(
         window = open_registration_window(db, admin, payload.user_id, payload.duration_minutes)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return RegistrationWindowResponse(id=window.id, expires_at=window.expires_at)
+
+
+@router.post("/registration-window/{window_id}/close", response_model=RegistrationWindowResponse)
+def close_window(
+    window_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("ADMIN")),
+) -> RegistrationWindowResponse:
+    window = db.scalar(select(RegistrationWindow).where(RegistrationWindow.id == window_id))
+    if window is None:
+        raise HTTPException(status_code=404, detail="Registration window not found")
+    now = datetime.now(timezone.utc)
+    window.expires_at = now
+    db.commit()
+    db.refresh(window)
     return RegistrationWindowResponse(id=window.id, expires_at=window.expires_at)
 
 

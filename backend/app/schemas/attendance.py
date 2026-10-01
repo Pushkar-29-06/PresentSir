@@ -23,6 +23,24 @@ class AttendanceSessionResponse(BaseModel):
     scheduled_end: datetime | None = None
 
 
+class AttendanceCountResponse(BaseModel):
+    session_id: int
+    accepted: int
+    enrolled: int
+
+
+class StudentAttendanceHistoryItem(BaseModel):
+    record_id: int
+    offering_id: int
+    course_code: str
+    course_name: str
+    session_id: int
+    lecture_date: date
+    scheduled_start: datetime | None
+    status: str | None
+    source: str | None
+
+
 class QrTokenResponse(BaseModel):
     session_id: int
     step: int
@@ -97,3 +115,9 @@ class DisputeResponse(BaseModel):
     status: str | None
     message: str | None
     response: str | None
+
+
+class FacultyDisputeResponse(DisputeResponse):
+    student_name: str
+    course_code: str
+    lecture_date: date
