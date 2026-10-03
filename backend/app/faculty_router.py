@@ -8,6 +8,7 @@ from app.models.academic import Course, Offering, Slot
 from app.models.user import Faculty, User
 from app.schemas.faculty import (
     FacultySlotCreate,
+    FacultyOfferingResponse,
     FacultySlotResponse,
     FacultySlotUpdate,
 )
@@ -40,6 +41,27 @@ def _owned_offering(db: Session, faculty: User, offering_id: int) -> Offering:
     if identity is None or offering is None:
         raise HTTPException(status_code=403, detail="Faculty does not own this offering")
     return offering
+
+
+@router.get("/offerings", response_model=list[FacultyOfferingResponse])
+def list_offerings(
+    db: Session = Depends(get_db),
+    faculty: User = Depends(require_roles("FACULTY")),
+) -> list[FacultyOfferingResponse]:
+    rows = db.execute(
+        select(Offering, Course)
+        .join(Course, Course.id == Offering.course_id)
+        .where(Offering.faculty_id == faculty.id)
+        .order_by(Course.code)
+    ).all()
+    return [
+        FacultyOfferingResponse(
+            id=offering.id,
+            course_code=course.code,
+            course_name=course.name,
+        )
+        for offering, course in rows
+    ]
 
 
 @router.get("/slots", response_model=list[FacultySlotResponse])
