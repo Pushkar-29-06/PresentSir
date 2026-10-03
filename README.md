@@ -1,170 +1,208 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-    <img alt="PresentSir" src="docs/assets/logo-light.svg" width="380">
-  </picture>
-</p>
+# PresentSir
 
-<p align="center">
-  <em>"Present, Sir."<br>Every Indian classroom, every morning. We're just making sure it's true.</em>
-</p>
+PresentSir is a smart attendance platform with a FastAPI backend, React/Vite web application, React Native mobile client, PostgreSQL, and Redis.
 
-<p align="center">
-  <img alt="status" src="https://img.shields.io/badge/status-hackathon%20build-0B5FB5">
-  <img alt="backend" src="https://img.shields.io/badge/backend-FastAPI-2E7D32">
-  <img alt="web" src="https://img.shields.io/badge/web-React%20%2B%20Vite-1F2933">
-  <img alt="app" src="https://img.shields.io/badge/app-React%20Native%20(Android)-1F2933">
-</p>
+It supports:
 
----
+- Role-based authentication for students, faculty, and administrators.
+- Faculty-owned courses, offerings, timetable slots, and attendance sessions.
+- Rotating QR attendance with signed device submissions.
+- Browser-based student attendance with QR camera scanning or manual code entry.
+- Faculty roster review and manual attendance corrections with audit history.
+- Student attendance history and analytics.
+- Device registration windows and public-key proof of possession.
+- Risk flags, disputes, notifications, assessments, policy, and reporting APIs.
 
-## Why this exists
+## Project layout
 
-Proxy attendance is the oldest trick in the college. A friend says "present, sir" for you, or a photo of the QR code goes around the class group. Most attendance tools digitise the roll call and stop there, so the cheating just moves to a new medium.
-
-PresentSir treats attendance as a security problem first and a reporting problem second. The scan has to come from *your* registered phone, unlocked by a fingerprint, in the last few seconds, in that lecture. Anything that still looks odd goes to the faculty as a flag with reasons. It never becomes an automatic penalty.
-
-Built for a 24 hour hackathon, so the scope is deliberately tight: get the attendance path right, then build the analytics on top of data we can trust.
-
-## How a scan works
-
-```mermaid
-sequenceDiagram
-    participant F as Faculty (smart board)
-    participant S as Server
-    participant P as Student phone
-
-    F->>S: Start session (window, QR refresh time)
-    loop every 10 s
-        S-->>F: New signed QR token (WebSocket)
-    end
-    P->>P: Scan QR
-    P->>P: Fingerprint unlocks the device key
-    P->>S: Token + signature (one request)
-    S->>S: Check token, device binding, signature, enrolment
-    S-->>F: Live count +1
-    F->>S: Close window, review, save, submit
+```text
+PresentSir/
+├── backend/              FastAPI API, SQLAlchemy models, Alembic migrations
+├── web/                  React + Vite website
+├── mobile/               React Native Android/iOS client
+├── PresentSirNative/     Additional React Native project assets
+├── docs/                 Setup, architecture, API, demo, deployment guides
+├── FRONTEND_FOUNDATION.md
+└── backend/BACKEND_SPEC_COMPLIANCE_MATRIX.md
 ```
 
-One request after the scan, nothing prefetched, so the flow stays well inside the QR refresh time.
+## Requirements
 
-## Architecture
+- Windows, macOS, or Linux.
+- Python 3.11+.
+- Node.js 20+ and npm.
+- Docker Desktop with Compose.
+- PostgreSQL and Redis are normally supplied by Docker.
+- A real HTTPS origin is required for phone camera and Web Crypto features. `localhost` is treated as secure by modern browsers; a LAN HTTP address generally is not.
 
-```mermaid
-flowchart LR
-    A[Android app] -->|REST :8000| API[API]
-    W[Website and smart board] -->|REST :8000| API
-    W -->|WebSocket :8008| RT[Realtime]
-    API --> PG[(PostgreSQL)]
-    API --> R[(Redis)]
-    RT --> R
-    RT --> PG
+## Quick start on Windows
+
+Open three PowerShell windows.
+
+### 1. Start PostgreSQL and Redis
+
+```powershell
+cd E:\presentsir\backend
+docker compose up -d
 ```
 
-Two small Python processes, one database, one Redis. The realtime service only pushes QR tokens and live counts. All decisions are made by the API.
+### 2. Prepare and start the backend
 
-## What we chose not to build
-
-A lot of the design is in the things we said no to.
-
-- **Storing fingerprints.** Android never hands them to an app, and we would not want them anyway. The server holds a public key. The private key lives in the phone's secure hardware and only signs after a fingerprint match.
-- **GPS geofencing.** Indoor GPS drifts by tens of metres and mock-location apps exist. It would reject honest students and stop nobody determined.
-- **Client-side "is this app cloned?" checks.** The client can lie. We verify a signature on the server instead.
-- **Machine learning for flags.** Every flag is a plain rule with a reason a teacher can read and overrule. We also track how many flags get dismissed, so we can see our own false-alarm rate.
-- **Face unlock.** It adds latency, and the QR is gone in ten seconds.
-
-## What it proves, and what it doesn't
-
-**Proves:** a student's registered phone, unlocked by a fingerprint enrolled on that phone, scanned the current QR.
-
-**Doesn't prove:** that the fingerprint belongs to the student. Registration is supervised at the start of the semester and the key is invalidated when a new fingerprint is added, which narrows the gap without closing it. A friend relaying the live QR is caught only by soft signals (timing, repeated pairs, headcount mismatch), which go to a faculty review queue.
-
-We would rather say that plainly than pretend otherwise.
-
-## What's in it
-
-| Area | Highlights |
-|---|---|
-| Attendance | Rotating signed QR, one user per device, biometric-signed scan, two-step save and submit, manual marking with a required reason |
-| Integrity | Append-only audit log, proxy-risk flags with reasons, faculty review queue, student disputes |
-| Students | Subject-wise attendance, trends, "you need N more lectures to reach the threshold" |
-| Faculty | Live board with counter, roster review, shortage list, early-warning list, CSV reports |
-| Admin | Supervised device registration, phone-change approvals, attendance threshold, institution analytics |
-
-## Repository layout
-
-```
-presentsir/
-  backend/    FastAPI: REST API (:8000) and realtime service (:8008)
-  web/        React website: faculty board, admin, student read-only
-  app/        React Native Android app
-  docs/       BACKEND_SPEC.md, FRONTEND_SPEC.md, assets/
-```
-
-## Running it locally
-
-You need Python 3.11, Node, Docker, Android Studio, and a **real Android phone** with USB debugging. Emulators can't produce a proper hardware-backed biometric key.
-
-```bash
-docker compose up -d                       # PostgreSQL + Redis
-
-cd backend
-cp .env.example .env
-pip install -r requirements.txt
+```powershell
+cd E:\presentsir\backend
+.\.venv\Scripts\Activate.ps1
 alembic upgrade head
-python scripts/seed.py                     # realistic demo data
-uvicorn app.main:app --port 8000
-uvicorn app.realtime:app --port 8008       # second terminal
-
-cd web && npm install && npm run dev       # http://localhost:5173
-
-cd app && npm install
-adb reverse tcp:8000 tcp:8000
-adb reverse tcp:8008 tcp:8008
-adb reverse tcp:8081 tcp:8081
-npx react-native run-android
+python scripts\seed.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-These commands describe the setup we are building toward. Treat them as unverified until the folders exist. API docs live at `http://localhost:8000/docs` in development.
+Verify it:
 
-| Service | Port |
+```text
+http://localhost:8000/health
+http://localhost:8000/docs
+```
+
+Expected health response:
+
+```json
+{"status":"ok"}
+```
+
+### 3. Start the web application
+
+```powershell
+cd E:\presentsir\web
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+The local web configuration is stored in [`web/.env.local`](./web/.env.local). For local development it should contain:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+## Demo accounts
+
+These accounts are created by the development seed only. Change or remove them before production.
+
+| Role | Login ID | Password |
+|---|---|---|
+| Student | `student001` | `Student@123` |
+| Student | `student002` | `Student@124` |
+| Student | `student003` | `Student@125` |
+| Student | `student004` | `Student@126` |
+| Student | `student005` | `Student@127` |
+| Student | `student006` | `Student@128` |
+| Faculty | `faculty001` | `Faculty@123` |
+| Admin | `admin001` | `Admin@123` |
+
+The seed creates the CS101 offering owned by `faculty001`, creates demo enrollment, and is safe to run repeatedly.
+
+## Attendance demonstration
+
+1. Sign in as `faculty001`.
+2. Open **Faculty sessions**.
+3. Select the faculty-owned offering.
+4. Add or select a slot.
+5. Create a session for the current lecture time.
+6. Start the session.
+7. Open **Smart board**.
+8. Students either scan the QR code or paste the complete manual code:
+
+   ```text
+   A1.<session_id>.<rotating_token>
+   ```
+
+9. Students must have a registered browser/device before submitting.
+10. Close the session to generate official `PRESENT` and `ABSENT` records.
+11. Open **Review** to change a record manually. A reason of at least five characters is required.
+12. Click **Save draft**, then **Submit final** when the roster is complete.
+
+Manual edits use source `MANUAL`. QR submissions become source `SCAN`. Every official record change writes an attendance audit entry.
+
+See [`docs/attendance-demo.md`](./docs/attendance-demo.md) for the complete flow and validation checklist.
+
+## Tests and builds
+
+Backend:
+
+```powershell
+cd E:\presentsir\backend
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Web typecheck/build:
+
+```powershell
+cd E:\presentsir\web
+npm run lint
+npm run build
+```
+
+Mobile typecheck:
+
+```powershell
+cd E:\presentsir\mobile
+npm run typecheck
+```
+
+## API overview
+
+The current application uses root paths rather than an `/api/v1` prefix.
+
+| Area | Example routes |
 |---|---|
-| API | 8000 |
-| Realtime (WebSocket) | 8008 |
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| Web dev server | 5173 |
-| Metro | 8081 |
+| Health | `GET /health` |
+| Authentication | `POST /auth/login`, `POST /auth/refresh`, `GET /me` |
+| Faculty data | `GET /faculty/offerings`, `POST /faculty/slots` |
+| Sessions | `POST /attendance/sessions`, `POST /attendance/sessions/{id}/start` |
+| QR | `GET /attendance/sessions/{id}/qr` |
+| Student submission | `POST /attendance/submissions` |
+| Roster | `GET /attendance/sessions/{id}/roster` |
+| Manual edit | `PATCH /attendance/sessions/{id}/records/{student_id}` |
+| Analytics | `/analytics/...` |
+| WebSocket | `/ws/sessions/{id}` |
 
-## Docs
+The generated OpenAPI document is available at `http://localhost:8000/openapi.json`.
 
-- [`docs/BACKEND_SPEC.md`](docs/BACKEND_SPEC.md): data model, QR and signing protocol, endpoints, risk rules, security checklist
-- [`docs/FRONTEND_SPEC.md`](docs/FRONTEND_SPEC.md): design language, screens, screen-to-endpoint mapping
+## Phone and HTTPS access
 
-## Progress
+For a phone, prefer an HTTPS tunnel or a properly configured reverse proxy. Temporary LocalTunnel URLs can expire or return `400`, `502`, or `503` even when the local application is healthy.
 
-- [ ] Spike: fingerprint-signed scan verified by the server, on a real phone
-- [ ] Supervised registration, one user per device
-- [ ] Smart board: rotating QR, live counter
-- [ ] Close, review, save, submit, audit log
-- [ ] Student and faculty analytics
-- [ ] Proxy flags and early warning
-- [ ] Admin panel
-- [ ] Demo rehearsed, backup recording made
+For a LAN-only test:
 
-## Team
+```text
+http://<laptop-private-ip>:5173
+```
 
-| Name | Focus |
-|---|---|
-| _name_ | Backend |
-| _name_ | Android app |
-| _name_ | Web |
-| _name_ | Data and analytics |
+Both devices must be on the same reachable private network, and Windows Firewall must allow the required ports. Camera access may still require HTTPS.
 
-## A note on tooling
+See [`docs/deployment.md`](./docs/deployment.md) and [`docs/troubleshooting.md`](./docs/troubleshooting.md).
 
-We use AI coding assistants, under written rules (see the top of `docs/BACKEND_SPEC.md`) and with human review on anything touching auth, crypto, or attendance writes. The product itself uses no AI in its decisions: attendance changes only when a person changes it.
+## Security notes
 
-## License
+- Never commit `.env`, private keys, JWTs, refresh tokens, or real student data.
+- Use a generated `JWT_SECRET` in every non-demo environment.
+- Keep `ENFORCE_LECTURE_TIME=true` outside controlled demonstrations.
+- Use HTTPS in production.
+- Restrict `CORS_ORIGINS` to exact trusted origins.
+- Demo passwords are for local development only.
 
-Not decided yet.
+## Documentation
+
+- [`docs/quickstart.md`](./docs/quickstart.md) — installation and daily startup.
+- [`docs/architecture.md`](./docs/architecture.md) — services, data flow, and state machine.
+- [`docs/api.md`](./docs/api.md) — endpoint contracts and examples.
+- [`docs/attendance-demo.md`](./docs/attendance-demo.md) — end-to-end attendance demonstration.
+- [`docs/deployment.md`](./docs/deployment.md) — production and HTTPS deployment guidance.
+- [`docs/mobile.md`](./docs/mobile.md) — React Native setup and real-device testing.
+- [`docs/troubleshooting.md`](./docs/troubleshooting.md) — common failures and fixes.
+- [`backend/BACKEND_SPEC_COMPLIANCE_MATRIX.md`](./backend/BACKEND_SPEC_COMPLIANCE_MATRIX.md) — implementation audit matrix.

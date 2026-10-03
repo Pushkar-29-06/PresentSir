@@ -1,3 +1,6 @@
+import { isUiDevMode } from "../auth/AuthProvider";
+import { mockApiResponses } from "../auth/mockData";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -49,6 +52,23 @@ export function createApiClient(baseUrl: string, tokens: TokenStore) {
     init: RequestInit = {},
     retried = false,
   ): Promise<T> {
+    // Dev mode: return mock data for known endpoints
+    if (isUiDevMode()) {
+      const mockData = mockApiResponses[path];
+      if (mockData !== undefined && !init.method) {
+        return mockData as T;
+      }
+      // For write operations in dev mode, return success without actual API call
+      if (init.method === "POST" || init.method === "DELETE" || init.method === "PUT" || init.method === "PATCH") {
+        // Return a generic success response
+        return { success: true } as T;
+      }
+      // For GET requests without mock data, return empty array or null
+      if (!init.method) {
+        return [] as T;
+      }
+    }
+
     const headers = new Headers(init.headers);
     headers.set("Content-Type", "application/json");
     const accessToken = tokens.getAccessToken();

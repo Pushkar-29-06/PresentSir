@@ -11,9 +11,11 @@ import { ThemeProvider } from "./theme/ThemeProvider";
 import { FacultySessionsPage } from "./pages/faculty/FacultySessionsPage";
 import { SmartBoardPage } from "./pages/faculty/SmartBoardPage";
 import { FacultyReviewPage } from "./pages/faculty/FacultyReviewPage";
+import { FacultyDashboardPage } from "./pages/faculty/FacultyDashboardPage";
 import "./theme/styles.css";
 import { StudentAttendancePage } from "./pages/student/StudentAttendancePage";
 import { StudentAnalyticsPage } from "./pages/student/StudentAnalyticsPage";
+import { StudentDashboardPage } from "./pages/student/StudentDashboardPage";
 import { FacultyAnalyticsPage } from "./pages/faculty/FacultyAnalyticsPage";
 import { AdminWorkspacePage } from "./pages/admin/AdminWorkspacePage";
 import { StaticShowcasePage } from "./pages/StaticShowcasePage";
@@ -26,7 +28,7 @@ createRoot(document.getElementById("root")!).render(<StrictMode>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth roles={["STUDENT"]} />}>
         <Route element={<AppShell role="Student" />}>
-          <Route path="/student" element={<RoleHome role="Student" />} />
+          <Route path="/student" element={<StudentDashboardPage />} />
           <Route path="/student/attendance" element={<StudentAttendancePage />} />
           <Route path="/student/analytics" element={<StudentAnalyticsPage />} />
           <Route path="/student/:module" element={<StaticShowcasePage />} />
@@ -34,14 +36,14 @@ createRoot(document.getElementById("root")!).render(<StrictMode>
       </Route>
       <Route element={<RequireAuth roles={["FACULTY"]} />}>
         <Route element={<AppShell role="Faculty" />}>
-          <Route path="/faculty" element={<RoleHome role="Faculty" />} />
+          <Route path="/faculty" element={<FacultyDashboardPage />} />
           <Route path="/faculty/sessions" element={<FacultySessionsPage />} />
           <Route path="/faculty/sessions/:id/review" element={<FacultyReviewPage />} />
+          <Route path="/faculty/sessions/:id/board" element={<SmartBoardPage />} />
           <Route path="/faculty/analytics" element={<FacultyAnalyticsPage />} />
           <Route path="/faculty/:module" element={<StaticShowcasePage />} />
         </Route>
       </Route>
-      <Route element={<RequireAuth roles={["FACULTY"]} />}><Route path="/faculty/sessions/:id/board" element={<SmartBoardPage />} /></Route>
       <Route element={<RequireAuth roles={["ADMIN"]} />}>
         <Route element={<AppShell role="Admin" />}>
           <Route path="/admin" element={<RoleHome role="Admin" />} />

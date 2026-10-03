@@ -1,46 +1,538 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  IconAlertTriangle,
+  IconChartLine,
+  IconClock,
+  IconUsers,
+  IconRefresh,
+  IconShieldCheck,
+  IconUserCheck,
+  IconX,
+} from "@tabler/icons-react";
 import { useAuth } from "../../auth/AuthProvider";
 
-type Slot = { offering_id: number; course_code: string; course_name: string };
-type Summary = { offering_id: number; sessions_held: number; enrolled_students: number; attendance_percentage: number; present_records: number; absent_records: number };
-type Trend = { week_start: string; sessions: number; present: number; absent: number; percentage: number };
-type StudentSummary = { offering_id: number; percentage: number; present: number; absent: number };
-type Warning = { student_id: number; offering_id: number; percentage: number; shortage: number };
-type Flag = { id: number; session_id?: number | null; student_id?: number | null; kind?: string | null; score?: number | null; level?: string | null; status?: string | null; reasons?: Record<string, unknown> | null };
-type Dispute = { id: number; student_id?: number | null; student_name: string; course_code: string; lecture_date: string; message?: string | null; status?: string | null; response?: string | null };
+type Slot = {
+  offering_id: number;
+  course_code: string;
+  course_name: string;
+};
 
-const tabs = ["summary", "trend", "shortage", "early-warning", "proxy", "disputes"] as const;
-type Tab = typeof tabs[number];
+type OfferingSummary = {
+  offering_id: number;
+  sessions_held: number;
+  enrolled_students: number;
+  total_records: number;
+  present_records: number;
+  absent_records: number;
+  attendance_percentage: number;
+};
+
+type WeeklyTrendPoint = {
+  week_start: string;
+  sessions: number;
+  present: number;
+  absent: number;
+  percentage: number;
+};
+
+type EarlyWarning = {
+  student_id: number;
+  offering_id: number;
+  percentage: number;
+  shortage: number;
+};
+
+type RiskQueueItem = {
+  id: number;
+  session_id: number | null;
+  student_id: number | null;
+  kind: string | null;
+  score: number | null;
+  level: string | null;
+  status: string | null;
+  reasons: Record<string, unknown> | null;
+};
+
+const formatPercentage = (value: number): string => `${value.toFixed(1)}%`;
+
+const formatDateLabel = (value: string): string =>
+  new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+    new Date(`${value}T00:00:00`)
+  );
 
 export function FacultyAnalyticsPage() {
   const { api } = useAuth();
-  const [tab, setTab] = useState<Tab>("summary"); const [slots, setSlots] = useState<Slot[]>([]); const [offeringId, setOfferingId] = useState("");
-  const [summary, setSummary] = useState<Summary | null>(null); const [trend, setTrend] = useState<Trend[]>([]); const [warnings, setWarnings] = useState<Warning[]>([]); const [flags, setFlags] = useState<Flag[]>([]); const [disputes, setDisputes] = useState<Dispute[]>([]); const [error, setError] = useState("");
-  const [decision, setDecision] = useState<{ flag: Flag; action: string } | null>(null); const [note, setNote] = useState(""); const [disputeDecision, setDisputeDecision] = useState<Dispute | null>(null); const [response, setResponse] = useState(""); const [newStatus, setNewStatus] = useState("PRESENT"); const [overview, setOverview] = useState<{ attendance: StudentSummary[]; marks: Array<Record<string, unknown>> } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [offeringId, setOfferingId] = useState<string>("");
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [summary, setSummary] = useState<OfferingSummary | null>(null);
+  const [trend, setTrend] = useState<WeeklyTrendPoint[]>([]);
+  const [earlyWarnings, setEarlyWarnings] = useState<EarlyWarning[]>([]);
+  const [flags, setFlags] = useState<RiskQueueItem[]>([]);
 
-  async function loadBase() { const nextSlots = await api.request<Slot[]>("/faculty/slots"); setSlots(nextSlots); if (!offeringId && nextSlots[0]) setOfferingId(String(nextSlots[0].offering_id)); }
-  async function loadTab(nextTab: Tab = tab) {
+  async function loadOfferings() {
+    try {
+      const nextSlots = await api.request<Slot[]>("/faculty/slots");
+      setSlots(nextSlots);
+      if (!offeringId && nextSlots.length > 0) {
+        setOfferingId(String(nextSlots[0].offering_id));
+      }
+    } catch {
+      setError("Unable to load faculty offerings.");
+    }
+  }
+
+  async function loadAnalytics() {
+    if (!offeringId) return;
+    setLoading(true);
     setError("");
     try {
-      if (nextTab === "summary" && offeringId) setSummary(await api.request<Summary>(`/analytics/offerings/${offeringId}/summary`));
-      if (nextTab === "trend" && offeringId) setTrend(await api.request<Trend[]>(`/analytics/offerings/${offeringId}/trend`));
-      if (nextTab === "shortage") setWarnings(await api.request<Warning[]>("/analytics/early-warnings?threshold=75"));
-      if (nextTab === "early-warning") setWarnings(await api.request<Warning[]>("/analytics/early-warnings?threshold=75"));
-      if (nextTab === "proxy") setFlags(await api.request<Flag[]>("/analytics/risk/queue?status=OPEN"));
-      if (nextTab === "disputes") setDisputes(await api.request<Dispute[]>("/attendance/disputes"));
-    } catch { setError("Unable to load this analytics view."); }
+      const [summaryData, trendData, warningsData, flagsData] = await Promise.all([
+        api.request<OfferingSummary>(`/analytics/offerings/${offeringId}/summary`),
+        api.request<WeeklyTrendPoint[]>(`/analytics/offerings/${offeringId}/trend`),
+        api.request<EarlyWarning[]>("/analytics/early-warnings?threshold=75"),
+        api.request<RiskQueueItem[]>("/analytics/risk/queue?status=OPEN"),
+      ]);
+      setSummary(summaryData);
+      setTrend(trendData);
+      setEarlyWarnings(warningsData.filter((w) => w.offering_id === Number(offeringId)));
+      setFlags(flagsData);
+    } catch {
+      setError("Unable to load analytics data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
-  useEffect(() => { void loadBase().catch(() => setError("Unable to load faculty offerings.")); }, []);
-  useEffect(() => { if (offeringId || ["shortage", "early-warning", "proxy", "disputes"].includes(tab)) void loadTab(); }, [tab, offeringId]);
-  const offerings = useMemo(() => Array.from(new Map(slots.map((slot) => [slot.offering_id, slot])).values()), [slots]);
-  async function decideFlag() {
-    if (!decision || note.trim().length < 5) return;
-    try { await api.request(`/analytics/risk/${decision.flag.id}/decision`, { method: "POST", body: JSON.stringify({ action: decision.action, note: note.trim() }) }); setDecision(null); setNote(""); await loadTab("proxy"); } catch { setError("Unable to resolve the proxy review."); }
-  }
-  async function decideDispute(status: "ACCEPTED" | "REJECTED") {
-    if (!disputeDecision || response.trim().length < 1) return;
-    try { await api.request(`/attendance/disputes/${disputeDecision.id}/decision`, { method: "POST", body: JSON.stringify({ status, response: response.trim(), new_status: status === "ACCEPTED" ? newStatus : null }) }); setDisputeDecision(null); setResponse(""); await loadTab("disputes"); } catch { setError("Unable to resolve the dispute."); }
-  }
-  async function openOverview(studentId: number) { try { setOverview(await api.request<{ attendance: StudentSummary[]; marks: Array<Record<string, unknown>> }>(`/analytics/students/${studentId}/overview`)); } catch { setError("Unable to load the student overview."); } }
-  return <div className="student-page"><div className="feature-header"><div><h2>Faculty analytics</h2><p>Attendance insights, early warnings, proxy review, and disputes.</p></div><label>Offering<select value={offeringId} onChange={(event) => setOfferingId(event.target.value)}><option value="">Select offering</option>{offerings.map((slot) => <option key={slot.offering_id} value={slot.offering_id}>{slot.course_code} — {slot.course_name}</option>)}</select></label></div>{error && <p role="alert" className="error-message">{error}</p>}<nav className="review-filters">{tabs.map((item) => <button className={tab === item ? "active-filter" : ""} key={item} onClick={() => setTab(item)}>{item.replace("-", " ")}</button>)}</nav>{tab === "summary" && <section className="content-card analytics-grid">{summary ? <><div><strong>Attendance</strong><span className="metric-large">{summary.attendance_percentage.toFixed(1)}%</span></div><div><strong>Sessions held</strong><span className="metric-large">{summary.sessions_held}</span></div><div><strong>Enrolled</strong><span className="metric-large">{summary.enrolled_students}</span></div><div><strong>Absent records</strong><span className="metric-large">{summary.absent_records}</span></div></> : <p>Select an offering to view summary.</p>}</section>}{tab === "trend" && <section className="content-card"><h3>Attendance trend</h3>{trend.map((item) => <div className="list-row" key={item.week_start}><span>{item.week_start}</span><strong>{item.percentage.toFixed(1)}% · {item.present} present · {item.absent} absent</strong></div>)}</section>}{(tab === "shortage" || tab === "early-warning") && <section className="content-card"><h3>{tab === "shortage" ? "Shortage list" : "Early warning"}</h3>{warnings.map((item) => <div className="list-row" key={`${item.student_id}-${item.offering_id}`}><span><strong>Student {item.student_id}</strong><small>Offering {item.offering_id}</small></span><span>{item.percentage.toFixed(1)}% · shortage {item.shortage.toFixed(1)}</span>{tab === "early-warning" && <button onClick={() => void openOverview(item.student_id)}>Open overview</button>}</div>)}</section>}{tab === "proxy" && <section className="content-card"><h3>Proxy review</h3>{flags.map((flag) => <div className="list-row" key={flag.id}><span><strong>Needs review</strong><small>Student {flag.student_id} · {flag.kind ?? "Flag"}</small></span><span className="row-actions"><button onClick={() => setDecision({ flag, action: "OK" })}>Mark OK</button><button onClick={() => setDecision({ flag, action: "DISMISS" })}>Dismiss</button><button onClick={() => setDecision({ flag, action: "CONFIRM_ABSENT" })}>Confirm and mark absent</button></span></div>)}</section>}{tab === "disputes" && <section className="content-card"><h3>Disputes</h3>{disputes.map((item) => <div className="list-row" key={item.id}><span><strong>{item.student_name} · {item.course_code}</strong><small>{item.lecture_date} · {item.message}</small></span><span>{item.status === "OPEN" ? <button onClick={() => setDisputeDecision(item)}>Respond</button> : item.status}</span></div>)}</section>}{overview && <div className="modal-backdrop"><section className="review-modal"><h3>Student overview</h3>{overview.attendance.map((item) => <p key={item.offering_id}>Offering {item.offering_id}: {item.percentage.toFixed(1)}% · {item.present} present · {item.absent} absent</p>)}<h4>Marks</h4>{overview.marks.length ? overview.marks.map((mark, index) => <p key={index}>{String(mark.title ?? "Assessment")}: {String(mark.marks ?? "—")} / {String(mark.max_marks ?? "—")}</p>) : <p>No marks available.</p>}<button onClick={() => setOverview(null)}>Close</button></section></div>}{decision && <div className="modal-backdrop"><section className="review-modal"><h3>{decision.action === "CONFIRM_ABSENT" ? "Confirm absence" : decision.action === "OK" ? "Mark flag OK" : "Dismiss flag"}</h3><label>Note<textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add a note (minimum 5 characters)" /></label><div className="modal-actions"><button onClick={() => setDecision(null)}>Cancel</button><button disabled={note.trim().length < 5} onClick={() => void decideFlag()}>Save decision</button></div></section></div>}{disputeDecision && <div className="modal-backdrop"><section className="review-modal"><h3>Resolve dispute</h3><label>Response<textarea rows={4} value={response} onChange={(event) => setResponse(event.target.value)} /></label><label>Accepted status<select value={newStatus} onChange={(event) => setNewStatus(event.target.value)}><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select></label><div className="modal-actions"><button onClick={() => setDisputeDecision(null)}>Cancel</button><button disabled={!response.trim()} onClick={() => void decideDispute("REJECTED")}>Reject</button><button disabled={!response.trim()} onClick={() => void decideDispute("ACCEPTED")}>Accept</button></div></section></div>}</div>;
+
+  useEffect(() => {
+    void loadOfferings();
+  }, []);
+
+  useEffect(() => {
+    if (offeringId) {
+      void loadAnalytics();
+    }
+  }, [offeringId]);
+
+  const offerings = useMemo(
+    () => Array.from(new Map(slots.map((slot) => [slot.offering_id, slot])).values()),
+    [slots]
+  );
+
+  const selectedOffering = offerings.find((o) => o.offering_id === Number(offeringId));
+
+  const courseWarnings = useMemo(
+    () => earlyWarnings.filter((w) => w.offering_id === Number(offeringId)),
+    [earlyWarnings, offeringId]
+  );
+
+  const trendPoints = trend
+    .map(
+      (item, index) =>
+        `${trend.length === 1 ? 50 : (index / (trend.length - 1)) * 100},${
+          100 - item.percentage
+        }`
+    )
+    .join(" ");
+
+  const weekToWeekChange =
+    trend.length > 1 ? trend.at(-1)!.percentage - trend.at(-2)!.percentage : null;
+
+  return (
+    <main className="student-page faculty-analytics-page">
+      <header className="faculty-analytics-header">
+        <div>
+          <span className="analytics-eyebrow">Faculty performance</span>
+          <h2>Faculty Analytics</h2>
+          <p>
+            Monitor attendance performance, trends, shortages and students requiring
+            attention.
+          </p>
+        </div>
+        <div className="course-selector">
+          <label htmlFor="offering-select">Course</label>
+          <select
+            id="offering-select"
+            value={offeringId}
+            onChange={(e) => setOfferingId(e.target.value)}
+            disabled={loading}
+          >
+            <option value="">Select a course</option>
+            {offerings.map((offering) => (
+              <option key={offering.offering_id} value={String(offering.offering_id)}>
+                {offering.course_code} — {offering.course_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </header>
+
+      {error && <p className="error-message" role="alert">{error}</p>}
+
+      {loading ? (
+        <section className="content-card analytics-loading" aria-live="polite">
+          Loading analytics…
+        </section>
+      ) : !offeringId ? (
+        <section className="content-card analytics-empty">
+          <IconChartLine size={28} />
+          <h3>Select a course</h3>
+          <p>Choose a course from the dropdown to view attendance analytics.</p>
+        </section>
+      ) : (
+        <>
+          {summary && (
+            <section className="analytics-overview-grid" aria-label="Course overview">
+              <Metric
+                icon={<IconChartLine size={20} />}
+                label="Overall attendance"
+                value={formatPercentage(summary.attendance_percentage)}
+                note={`${summary.total_records} total records`}
+                primary
+              />
+              <Metric
+                icon={<IconUsers size={20} />}
+                label="Enrolled students"
+                value={String(summary.enrolled_students)}
+                note={`${summary.present_records} present records`}
+                tone="positive"
+              />
+              <Metric
+                icon={<IconClock size={20} />}
+                label="Sessions held"
+                value={String(summary.sessions_held)}
+                note={`${summary.absent_records} absent records`}
+                tone="neutral"
+              />
+              <Metric
+                icon={
+                  courseWarnings.length > 0 ? (
+                    <IconAlertTriangle size={20} />
+                  ) : (
+                    <IconUserCheck size={20} />
+                  )
+                }
+                label="Students below threshold"
+                value={String(courseWarnings.length)}
+                note={
+                  courseWarnings.length > 0
+                    ? "Attendance requires attention"
+                    : "All students on track"
+                }
+                tone={courseWarnings.length > 0 ? "warning" : "positive"}
+              />
+            </section>
+          )}
+
+          {trend.length > 0 && (
+            <section className="content-card trend-card">
+              <CardHeading
+                title="Attendance trend"
+                description="Weekly attendance percentage over time."
+                aside={
+                  weekToWeekChange !== null
+                    ? weekToWeekChange > 0
+                      ? `↑ ${weekToWeekChange.toFixed(1)} pts this week`
+                      : weekToWeekChange < 0
+                      ? `↓ ${Math.abs(weekToWeekChange).toFixed(1)} pts this week`
+                      : "No change this week"
+                    : undefined
+                }
+              />
+              <div className="trend-chart-wrap">
+                <div className="trend-y-axis" aria-hidden="true">
+                  <span>100%</span>
+                  <span>75%</span>
+                  <span>50%</span>
+                  <span>25%</span>
+                  <span>0%</span>
+                </div>
+                <div
+                  className="trend-chart"
+                  role="img"
+                  aria-label="Weekly attendance percentage trend"
+                >
+                  <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <line x1="0" y1="0" x2="100" y2="0" />
+                    <line x1="0" y1="25" x2="100" y2="25" />
+                    <line x1="0" y1="50" x2="100" y2="50" />
+                    <line x1="0" y1="75" x2="100" y2="75" />
+                    <line x1="0" y1="100" x2="100" y2="100" />
+                    <polyline points={trendPoints} />
+                  </svg>
+                  <div
+                    className="trend-columns"
+                    style={{
+                      gridTemplateColumns: `repeat(${trend.length}, 1fr)`,
+                    }}
+                  >
+                    {trend.map((item) => (
+                      <div key={item.week_start}>
+                        <strong>{formatPercentage(item.percentage)}</strong>
+                        <span>{formatDateLabel(item.week_start)}</span>
+                        <small>
+                          {item.present} present · {item.absent} absent
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {summary && (
+            <section className="analytics-detail-grid">
+              <section className="content-card">
+                <CardHeading
+                  title="Course performance"
+                  description="Attendance distribution across the course."
+                />
+                <div className="performance-bars">
+                  <div className="bar-row">
+                    <span>Present records</span>
+                    <div className="bar-track">
+                      <i
+                        style={{
+                          width: `${(summary.present_records / summary.total_records) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>{summary.present_records}</strong>
+                  </div>
+                  <div className="bar-row">
+                    <span>Absent records</span>
+                    <div className="bar-track">
+                      <i
+                        style={{
+                          width: `${(summary.absent_records / summary.total_records) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>{summary.absent_records}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="content-card">
+                <CardHeading
+                  title="Session summary"
+                  description="Conducted sessions and student participation."
+                />
+                <div className="session-stats">
+                  <div className="stat-item">
+                    <strong>{summary.sessions_held}</strong>
+                    <span>Sessions held</span>
+                  </div>
+                  <div className="stat-item">
+                    <strong>{summary.enrolled_students}</strong>
+                    <span>Enrolled students</span>
+                  </div>
+                  <div className="stat-item">
+                    <strong>{formatPercentage(summary.attendance_percentage)}</strong>
+                    <span>Average attendance</span>
+                  </div>
+                </div>
+              </section>
+            </section>
+          )}
+
+          {courseWarnings.length > 0 && (
+            <section className="content-card shortage-section">
+              <CardHeading
+                title="Attendance shortage"
+                description="Students whose attendance requires attention."
+              />
+              <div className="shortage-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student ID</th>
+                      <th>Attendance</th>
+                      <th>Shortage</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courseWarnings.map((warning) => (
+                      <tr key={`${warning.student_id}-${warning.offering_id}`}>
+                        <td>
+                          <strong>Student {warning.student_id}</strong>
+                        </td>
+                        <td>
+                          <span className="attendance-value warning">
+                            {formatPercentage(warning.percentage)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="shortage-value">
+                            {formatPercentage(warning.shortage)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="status-badge warning">
+                            <IconAlertTriangle size={14} /> Requires attention
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {earlyWarnings.length > 0 && (
+            <section className="content-card early-warning-section">
+              <CardHeading
+                title="Early warning"
+                description="Students across all courses with attendance below threshold."
+              />
+              <div className="warning-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student ID</th>
+                      <th>Course</th>
+                      <th>Attendance</th>
+                      <th>Shortage</th>
+                      <th>Level</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {earlyWarnings.map((warning) => (
+                      <tr key={`${warning.student_id}-${warning.offering_id}`}>
+                        <td>
+                          <strong>Student {warning.student_id}</strong>
+                        </td>
+                        <td>Offering {warning.offering_id}</td>
+                        <td>
+                          <span
+                            className={`attendance-value ${
+                              warning.shortage > 15 ? "critical" : "warning"
+                            }`}
+                          >
+                            {formatPercentage(warning.percentage)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="shortage-value">
+                            {formatPercentage(warning.shortage)}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`level-badge ${
+                              warning.shortage > 15 ? "high" : "medium"
+                            }`}
+                          >
+                            {warning.shortage > 15 ? "HIGH" : "MEDIUM"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {flags.length > 0 && (
+            <section className="content-card review-section">
+              <CardHeading
+                title="Needs review"
+                description="Flags requiring faculty attention and review."
+              />
+              <div className="review-list">
+                {flags.map((flag) => (
+                  <div className="review-item" key={flag.id}>
+                    <div className="review-info">
+                      <div className="review-header">
+                        <strong>Flag #{flag.id}</strong>
+                        <span
+                          className={`level-badge ${
+                            flag.level === "HIGH" ? "high" : flag.level === "MEDIUM" ? "medium" : "low"
+                          }`}
+                        >
+                          {flag.level}
+                        </span>
+                      </div>
+                      <div className="review-details">
+                        <span>Student {flag.student_id}</span>
+                        <span>Session {flag.session_id}</span>
+                        <span>Type: {flag.kind}</span>
+                        {flag.score !== null && <span>Score: {flag.score.toFixed(2)}</span>}
+                      </div>
+                      {flag.reasons && Object.keys(flag.reasons).length > 0 && (
+                        <div className="review-reasons">
+                          {Object.entries(flag.reasons).map(([key, value]) => (
+                            <span key={key} className="reason-tag">
+                              {key}: {String(value)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className={`status-badge ${flag.status === "OPEN" ? "open" : "resolved"}`}>
+                      {flag.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
+
+function Metric({
+  icon,
+  label,
+  value,
+  note,
+  tone = "",
+  primary = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  note: string;
+  tone?: string;
+  primary?: boolean;
+}) {
+  return (
+    <article className={`analytics-metric ${primary ? "primary" : ""}`}>
+      <span className={`metric-icon ${tone}`}>{icon}</span>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{note}</small>
+    </article>
+  );
+}
+
+function CardHeading({
+  title,
+  description,
+  aside,
+}: {
+  title: string;
+  description: string;
+  aside?: string;
+}) {
+  return (
+    <div className="analytics-card-heading">
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      {aside && <span>{aside}</span>}
+    </div>
+  );
 }

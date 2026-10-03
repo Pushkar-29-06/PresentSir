@@ -11,6 +11,12 @@ class FacultySlotCreate(BaseModel):
     room: str = Field(min_length=1)
 
 
+class FacultyOfferingResponse(BaseModel):
+    id: int
+    course_code: str
+    course_name: str
+
+
 class FacultySlotUpdate(BaseModel):
     day_of_week: int | None = Field(default=None, ge=0, le=6)
     start_time: time | None = None
@@ -29,4 +35,3 @@ class FacultySlotResponse(BaseModel):
     end_time: time
     room: str
     active: bool
-
