@@ -1,20 +1,15 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 
-export type ThemeMode = "light" | "dark" | "system";
-const ThemeContext = createContext<{ mode: ThemeMode; setMode: (mode: ThemeMode) => void } | null>(null);
-const THEME_KEY = "presentsir.theme";
+const ThemeContext = createContext<{ mode: "light" } | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(THEME_KEY);
-    return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
-  });
   useEffect(() => {
-    const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem(THEME_KEY, mode);
-  }, [mode]);
-  return <ThemeContext.Provider value={{ mode, setMode }}>{children}</ThemeContext.Provider>;
+    // Force light mode only
+    document.documentElement.dataset.theme = "light";
+    // Clear any stored theme preference
+    localStorage.removeItem("presentsir.theme");
+  }, []);
+  return <ThemeContext.Provider value={{ mode: "light" }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

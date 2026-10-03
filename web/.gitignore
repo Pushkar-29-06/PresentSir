@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 .env.local
+
+I3C_FACULTY_WEB.md
